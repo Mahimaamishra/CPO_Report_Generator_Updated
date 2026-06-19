@@ -311,9 +311,9 @@
       <div class="section-title">Performance Summary</div>
       <div class="kpi-row">
         <div class="kpi-card">
-          <div class="kpi-label">Total Unique Patients</div>
+          <div class="kpi-label">Monthly Unique Patientss</div>
           <div class="kpi-val" id="r-totalPatients">—</div>
-          <div class="kpi-sub">Across all months</div>
+          <div class="kpi-sub">For Current month</div>
         </div>
         <div class="kpi-card gold">
           <div class="kpi-label">Total Revenue</div>
@@ -566,7 +566,7 @@ function render() {
   
  
   // totals
-  const totPatients = months.reduce((s,m)=>s+m.patients,0);
+  const totPatients = months[currentIdx].patients;
   const totRevenue = months.reduce((s,m)=>s+m.revenue,0);
   const totCodes = months.reduce((s,m)=>s+m.c0179+m.c0180+m.c0181,0);
   id('r-totalPatients').textContent = totPatients.toLocaleString();
