@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Doctor Alliance — Report Generator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  /* ── TOKENS ────────────────────────────────────────────── */
+  :root {
+    --ink:       #0F1C2E;
+    --ink-soft:  #3B4C62;
+    --teal:      #0D6E7A;
+    --teal-light:#E4F4F6;
+    --gold:      #B8882A;
+    --gold-light:#FDF3DC;
+    --rule:      #D0DAE4;
+    --bg:        #F7F9FC;
+    --white:     #FFFFFF;
+    --green:     #1A7A4A;
+    --radius:    6px;
+    --shadow:    0 2px 12px rgba(15,28,46,.08);
+  }
+ 
+  /* ── RESET ─────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--ink); font-size: 15px; }
+ 
+  /* ── APP SHELL ──────────────────────────────────────────── */
+  #app { display: flex; min-height: 100vh; }
+ 
+  /* ── SIDEBAR ────────────────────────────────────────────── */
+  #sidebar {
+    width: 320px; min-width: 320px; background: var(--ink); color: #C8D8E8;
+    padding: 28px 24px; display: flex; flex-direction: column; gap: 24px;
+  }
+  #sidebar h1 { font-size: 18px; font-weight: 700; color: #fff; letter-spacing: -.3px; }
+  #sidebar h1 span { color: var(--gold); }
+  #sidebar .section-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 1.2px;
+    text-transform: uppercase; color: #6A869E; margin-bottom: 10px;
+  }
+  label { display: block; font-size: 13px; color: #A8BFCF; margin-bottom: 4px; }
+  input[type=text], input[type=number], textarea, select {
+    width: 100%; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.12);
+    color: #fff; border-radius: var(--radius); padding: 8px 10px; font-size: 13px;
+    outline: none; transition: border-color .15s;
+  }
+  input[type=text]:focus, input[type=number]:focus, textarea:focus, select:focus {
+    border-color: var(--teal);
+  }
+  textarea { resize: vertical; min-height: 70px; line-height: 1.5; }
+  .field { margin-bottom: 12px; }
+ 
+  /* month tabs */
+  #month-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+  .mtab {
+    padding: 5px 12px; border-radius: 20px; font-size: 12px; cursor: pointer;
+    border: 1px solid rgba(255,255,255,.18); color: #A8BFCF; background: transparent;
+    transition: all .15s;
+  }
+  .mtab.active { background: var(--teal); border-color: var(--teal); color: #fff; }
+  .mtab.add-btn {
+    border-style: dashed; color: #6A869E;
+  }
+  .mtab.add-btn:hover { color: #fff; border-color: var(--teal); }
+  .mtab.del-btn {
+    background: transparent; border-color: #7A3030; color: #C07070; padding: 5px 8px;
+  }
+  .mtab.del-btn:hover { background: #7A3030; color: #fff; }
+ 
+  /* code row in sidebar */
+  .code-row { display: grid; grid-template-columns: 60px 1fr; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .code-badge {
+    font-size: 11px; font-weight: 700; letter-spacing: .5px;
+    padding: 3px 6px; border-radius: 4px; text-align: center;
+  }
+  .badge-0179 { background: rgba(13,110,122,.25); color: #7ED4DE; }
+  .badge-0180 { background: rgba(184,136,42,.20); color: #D4A84A; }
+  .badge-0181 { background: rgba(26,122,74,.20); color: #5DC491; }
+ 
+  /* ops metrics */
+  .ops-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+ 
+  /* action buttons */
+  .btn-primary {
+    width: 100%; padding: 11px; background: var(--teal); color: #fff;
+    border: none; border-radius: var(--radius); font-size: 14px; font-weight: 600;
+    cursor: pointer; transition: background .15s; letter-spacing: .2px;
+  }
+  .btn-primary:hover { background: #0A5A65; }
+  .btn-secondary {
+    width: 100%; padding: 9px; background: transparent; color: #6A869E;
+    border: 1px solid rgba(255,255,255,.12); border-radius: var(--radius);
+    font-size: 13px; cursor: pointer; transition: all .15s;
+  }
+  .btn-secondary:hover { color: #fff; border-color: rgba(255,255,255,.3); }
+ 
+  /* ── REPORT AREA ────────────────────────────────────────── */
+  #report-area {
+    flex: 1; padding: 40px 48px; overflow-y: auto;
+  }
+ 
+  /* ── REPORT PAGE ────────────────────────────────────────── */
+  #report {
+    max-width: 860px; margin: 0 auto; background: var(--white);
+    border-radius: 10px; box-shadow: var(--shadow); overflow: hidden;
+  }
+ 
+  /* header banner */
+  .report-header {
+    background: var(--ink); color: #fff; padding: 32px 40px;
+    display: flex; justify-content: space-between; align-items: flex-end;
+  }
+  .report-header .org { font-size: 22px; font-weight: 800; letter-spacing: -.4px; }
+  .report-header .org span { color: var(--gold); }
+  .report-header .meta { text-align: right; font-size: 12px; color: #7A95B0; line-height: 1.7; }
+  .report-header .meta strong { color: #C8D8E8; display: block; font-size: 14px; }
+ 
+  /* report body */
+  .report-body { padding: 36px 40px; }
+  .report-section { margin-bottom: 36px; }
+  .section-title {
+    font-size: 11px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase;
+    color: var(--teal); border-bottom: 2px solid var(--teal-light);
+    padding-bottom: 8px; margin-bottom: 18px;
+  }
+ 
+  /* KPI cards */
+  .kpi-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .kpi-card {
+    background: var(--bg); border-radius: var(--radius); padding: 18px 20px;
+    border-left: 4px solid var(--teal);
+  }
+  .kpi-card.gold { border-left-color: var(--gold); }
+  .kpi-card.green { border-left-color: var(--green); }
+  .kpi-label { font-size: 11px; color: var(--ink-soft); font-weight: 600; text-transform: uppercase; letter-spacing: .8px; margin-bottom: 6px; }
+  .kpi-val { font-size: 28px; font-weight: 800; color: var(--ink); letter-spacing: -1px; }
+  .kpi-sub { font-size: 12px; color: var(--ink-soft); margin-top: 3px; }
+ 
+  /* codes table */
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  thead tr { background: var(--ink); color: #fff; }
+  thead th { padding: 11px 14px; text-align: left; font-size: 11px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; }
+  tbody tr:nth-child(even) { background: var(--bg); }
+  tbody tr:hover { background: var(--teal-light); }
+  tbody td { padding: 11px 14px; color: var(--ink); border-bottom: 1px solid var(--rule); }
+  td.code-cell { font-weight: 700; font-size: 13px; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tfoot tr { background: var(--gold-light); }
+  tfoot td { padding: 11px 14px; font-weight: 700; font-size: 14px; color: var(--ink); border-top: 2px solid var(--gold); }
+ 
+  /* ops metrics grid */
+  .ops-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  .ops-card {
+    background: var(--bg); border-radius: var(--radius); padding: 16px 18px;
+    display: flex; gap: 14px; align-items: flex-start;
+  }
+  .ops-icon { font-size: 22px; margin-top: 2px; }
+  .ops-metric { font-size: 18px; font-weight: 800; color: var(--ink); letter-spacing: -.5px; }
+  .ops-desc { font-size: 12px; color: var(--ink-soft); margin-top: 2px; }
+ 
+  /* proactive list */
+  .proactive-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  .proactive-list li {
+    display: flex; gap: 12px; align-items: flex-start;
+    background: var(--teal-light); border-radius: var(--radius); padding: 12px 16px;
+    font-size: 14px; color: var(--ink); line-height: 1.5;
+  }
+  .proactive-list li::before { content: "✓"; color: var(--teal); font-weight: 800; flex-shrink: 0; margin-top: 1px; }
+ 
+  /* chart row */
+  .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .chart-wrap { background: var(--bg); border-radius: var(--radius); padding: 18px; }
+  .chart-title { font-size: 12px; font-weight: 700; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 14px; }
+ 
+  /* impact footer */
+  .impact-box {
+    background: linear-gradient(135deg, var(--teal) 0%, #0A4D57 100%);
+    border-radius: var(--radius); padding: 20px 24px; color: #fff;
+    display: flex; gap: 14px; align-items: center;
+  }
+  .impact-box .bulb { font-size: 28px; flex-shrink: 0; }
+  .impact-box p { font-size: 14px; line-height: 1.6; }
+  .impact-box strong { font-size: 15px; }
+ 
+  /* report footer */
+  .report-footer {
+    border-top: 1px solid var(--rule); padding: 18px 40px;
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 12px; color: #9AABB8;
+  }
+ 
+  /* ── PRINT STYLES ───────────────────────────────────────── */
+  @media print {
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    #app { display: block; }
+    #sidebar { display: none !important; }
+    #report-area { padding: 0; }
+    #report { box-shadow: none; border-radius: 0; max-width: 100%; }
+    body { background: #fff; }
+    .chart-row { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+ 
+<!-- ══════════════════ SIDEBAR ════════════════════════════ -->
+<div id="sidebar">
+  <div>
+    <h1>Doctor<span>Alliance</span></h1>
+    <div style="font-size:12px;color:#5A7590;margin-top:4px;">CPO Report Generator</div>
+  </div>
+ 
+  <!-- PG Info -->
+  <div>
+    <div class="section-label">Physician Group</div>
+    <div class="field"><label>Group Name</label><input type="text" id="pgName" value="Riverside Medical Associates" oninput="render()"></div>
+    <div class="field"><label>Report Period</label><input type="text" id="reportPeriod" value="Q1 2025 — February through April" oninput="render()"></div>
+    <div class="field"><label>Prepared By</label><input type="text" id="preparedBy" value="Doctor Alliance Operations Team" oninput="render()"></div>
+  </div>
+ 
+  <!-- Month Selector -->
+  <div>
+    <div class="section-label">Month Data</div>
+    <div id="month-tabs"></div>
+    <div style="height:14px;"></div>
+ 
+    <!-- Code Counts -->
+    <div class="section-label" style="margin-top:4px;">CPO Code Counts</div>
+    <div class="code-row"><div class="code-badge badge-0179">G0179</div><input type="number" id="c0179" min="0" oninput="saveMonth();render()"></div>
+    <div class="code-row"><div class="code-badge badge-0180">G0180</div><input type="number" id="c0180" min="0" oninput="saveMonth();render()"></div>
+    <div class="code-row"><div class="code-badge badge-0181">G0181</div><input type="number" id="c0181" min="0" oninput="saveMonth();render()"></div>
+ 
+    <div class="field" style="margin-top:14px;">
+      <label>Unique Patients</label>
+      <input type="number" id="patients" min="0" oninput="saveMonth();render()">
+    </div>
+    <div class="field">
+      <label>Potential Revenue ($)</label>
+      <input type="number" id="revenue" min="0" oninput="saveMonth();render()">
+    </div>
+  </div>
+ 
+  <!-- Ops Metrics -->
+  <div>
+    <div class="section-label">Ops Metrics (this month)</div>
+    <div class="ops-pair">
+      <div class="field"><label>Orders Processed</label><input type="text" id="opsOrders" oninput="saveMonth();render()"></div>
+      <div class="field"><label>Facilities</label><input type="text" id="opsFacilities" oninput="saveMonth();render()"></div>
+    </div>
+    <div class="ops-pair">
+      <div class="field"><label>Patients Coordinated</label><input type="text" id="opsPatients" oninput="saveMonth();render()"></div>
+      <div class="field"><label>Physicians</label><input type="text" id="opsPhysicians" oninput="saveMonth();render()"></div>
+    </div>
+    <div class="ops-pair">
+      <div class="field"><label>Doc Accuracy</label><input type="text" id="opsAccuracy" oninput="saveMonth();render()"></div>
+      <div class="field"><label>Sign Rate</label><input type="text" id="opsSignRate" oninput="saveMonth();render()"></div>
+    </div>
+    <div class="field">
+      <label>CPO Minutes Captured</label>
+      <input type="text" id="opsMinutes" oninput="saveMonth();render()">
+    </div>
+  </div>
+ 
+  <!-- Proactive Items -->
+  <div>
+    <div class="section-label">Handled Proactively (one per line)</div>
+    <div class="field">
+      <textarea id="proactiveList" oninput="saveMonth();render()"></textarea>
+    </div>
+  </div>
+ 
+  <!-- Impact Note -->
+  <div>
+    <div class="section-label">Impact Statement</div>
+    <div class="field">
+      <textarea id="impactText" rows="3" oninput="render()"></textarea>
+    </div>
+  </div>
+ 
+  <div style="display:flex;flex-direction:column;gap:8px;">
+    <button class="btn-primary" onclick="exportPDF()">⬇ Export PDF</button>
+    <button class="btn-secondary" onclick="addMonth()">+ Add Month</button>
+    <button class="btn-secondary" onclick="deleteMonth()">Remove Current Month</button>
+  </div>
+</div>
+ 
+<!-- ══════════════════ REPORT ════════════════════════════ -->
+<div id="report-area">
+<div id="report">
+ 
+  <div class="report-header">
+    <div>
+      <div class="org">Doctor<span>Alliance</span></div>
+      <div style="font-size:13px;color:#7A95B0;margin-top:5px;">Care Plan Oversight (CPO) — Operational Report</div>
+    </div>
+    <div class="meta">
+      <strong id="r-pgName"></strong>
+      <span id="r-period"></span><br>
+      <span id="r-preparedBy"></span><br>
+      
+    </div>
+  </div>
+ 
+  <div class="report-body">
+ 
+    <!-- KPIs -->
+    <div class="report-section">
+      <div class="section-title">Performance Summary</div>
+      <div class="kpi-row">
+        <div class="kpi-card">
+          <div class="kpi-label">Total Unique Patients</div>
+          <div class="kpi-val" id="r-totalPatients">—</div>
+          <div class="kpi-sub">Across all months</div>
+        </div>
+        <div class="kpi-card gold">
+          <div class="kpi-label">Total Revenue</div>
+          <div class="kpi-val" id="r-totalRevenue">—</div>
+          <div class="kpi-sub">Projected from CPO codes</div>
+        </div>
+        <div class="kpi-card green">
+          <div class="kpi-label">Total CPO Encounters</div>
+          <div class="kpi-val" id="r-totalCodes">—</div>
+          <div class="kpi-sub">G0179 + G0180 + G0181</div>
+        </div>
+      </div>
+    </div>
+ 
+    <!-- Codes Table -->
+    <div class="report-section">
+      <div class="section-title">Codes Dashboard</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Month</th>
+            <th>G0179</th>
+            <th>G0180</th>
+            <th>G0181</th>
+            <th class="num">Unique Patients</th>
+            <th class="num">Potential Revenue</th>
+          </tr>
+        </thead>
+        <tbody id="r-codesBody"></tbody>
+        <tfoot id="r-codesFoot"></tfoot>
+      </table>
+      <div style="margin-top:10px;font-size:12px;color:var(--ink-soft);">Codes reflect Care Plan Oversight services completed during the reporting period with associated patient count and projected revenue impact.</div>
+    </div>
+ 
+    <!-- Charts -->
+    <div class="report-section">
+      <div class="section-title">Trend Analysis</div>
+      <div class="chart-row">
+        <div class="chart-wrap">
+          <div class="chart-title">Code Volume by Month</div>
+          <canvas id="barChart" height="180"></canvas>
+        </div>
+        <div class="chart-wrap">
+          <div class="chart-title">Revenue Trajectory ($)</div>
+          <canvas id="lineChart" height="180"></canvas>
+        </div>
+      </div>
+    </div>
+ 
+    <!-- Ops Dashboard (current month) -->
+    <div class="report-section">
+      <div class="section-title">Operations Dashboard — <span id="r-opsMonth"></span></div>
+      <div class="ops-grid">
+        <div class="ops-card">
+          <div class="ops-icon">📋</div>
+          <div>
+            <div class="ops-metric" id="r-opsOrders">—</div>
+            <div class="ops-desc">Orders processed across <span id="r-opsFacilities">—</span> facilities</div>
+          </div>
+        </div>
+        <div class="ops-card">
+          <div class="ops-icon">👥</div>
+          <div>
+            <div class="ops-metric" id="r-opsPatients">—</div>
+            <div class="ops-desc">Patients coordinated across <span id="r-opsPhysicians">—</span> physicians</div>
+          </div>
+        </div>
+        <div class="ops-card">
+          <div class="ops-icon">✅</div>
+          <div>
+            <div class="ops-metric" id="r-opsAccuracy">—</div>
+            <div class="ops-desc">Documentation accuracy</div>
+          </div>
+        </div>
+        <div class="ops-card">
+          <div class="ops-icon">🖊</div>
+          <div>
+            <div class="ops-metric" id="r-opsSignRate">—</div>
+            <div class="ops-desc">Physician sign-off rate</div>
+          </div>
+        </div>
+        <div class="ops-card" style="grid-column:span 2">
+          <div class="ops-icon">⏱</div>
+          <div>
+            <div class="ops-metric" id="r-opsMinutes">—</div>
+            <div class="ops-desc">CPO minutes captured this month</div>
+          </div>
+        </div>
+      </div>
+    </div>
+ 
+    <!-- Proactive -->
+    <div class="report-section">
+      <div class="section-title">Handled Proactively This Month</div>
+      <ul class="proactive-list" id="r-proactiveList"></ul>
+    </div>
+ 
+    <!-- Impact -->
+    <div class="report-section" style="margin-bottom:0;">
+      <div class="impact-box">
+        <div class="bulb">💡</div>
+        <p id="r-impact"></p>
+      </div>
+    </div>
+ 
+  </div><!-- /report-body -->
+ 
+  <div class="report-footer">
+    <span>Doctor Alliance · Confidential</span>
+    <span></span>
+  </div>
+ 
+</div><!-- /report -->
+</div><!-- /report-area -->
+</div><!-- /app -->
+ 
+<script>
+// ── DATA ──────────────────────────────────────────────────
+const defaultMonths = [
+  { name:'February', c0179:14, c0180:18, c0181:60, patients:60, revenue:8840,
+    opsOrders:'113+', opsFacilities:'22', opsPatients:'55', opsPhysicians:'2',
+    opsAccuracy:'99%', opsSignRate:'80%', opsMinutes:'~1,560',
+    proactive:'Coordinated HHAs and managed documentation lifecycle\nResolved escalations before reaching your team' },
+  { name:'March', c0179:15, c0180:18, c0181:66, patients:67, revenue:9600,
+    opsOrders:'127+', opsFacilities:'22', opsPatients:'60', opsPhysicians:'2',
+    opsAccuracy:'99%', opsSignRate:'83%', opsMinutes:'~1,720',
+    proactive:'Coordinated HHAs and managed documentation lifecycle\nResolved escalations before reaching your team' },
+  { name:'April', c0179:18, c0180:8, c0181:52, patients:53, revenue:7440,
+    opsOrders:'101+', opsFacilities:'20', opsPatients:'48', opsPhysicians:'2',
+    opsAccuracy:'98%', opsSignRate:'81%', opsMinutes:'~1,420',
+    proactive:'Coordinated HHAs and managed documentation lifecycle\nResolved escalations before reaching your team' },
+];
+ 
+let months = JSON.parse(localStorage.getItem('daMonths') || 'null') || defaultMonths.map(m=>({...m}));
+let currentIdx = 0;
+ 
+// ── CHARTS ────────────────────────────────────────────────
+let barChart, lineChart;
+ 
+function initCharts() {
+  const bCtx = document.getElementById('barChart').getContext('2d');
+  const lCtx = document.getElementById('lineChart').getContext('2d');
+  barChart = new Chart(bCtx, {
+    type: 'bar',
+    data: { labels:[], datasets:[
+      { label:'G0179', data:[], backgroundColor:'#0D6E7A', borderRadius:4 },
+      { label:'G0180', data:[], backgroundColor:'#B8882A', borderRadius:4 },
+      { label:'G0181', data:[], backgroundColor:'#1A7A4A', borderRadius:4 },
+    ]},
+    options: { plugins:{legend:{labels:{font:{size:11},color:'#3B4C62'}}}, scales:{
+      x:{ticks:{color:'#3B4C62',font:{size:11}},grid:{display:false}},
+      y:{ticks:{color:'#3B4C62',font:{size:11}},grid:{color:'#E8EEF4'}}
+    }, responsive:true, maintainAspectRatio:true }
+  });
+  lineChart = new Chart(lCtx, {
+    type: 'line',
+    data: { labels:[], datasets:[{
+      label:'Revenue ($)', data:[], borderColor:'#B8882A', backgroundColor:'rgba(184,136,42,.1)',
+      fill:true, tension:.35, pointBackgroundColor:'#B8882A', pointRadius:5
+    }]},
+    options: { plugins:{legend:{labels:{font:{size:11},color:'#3B4C62'}}}, scales:{
+      x:{ticks:{color:'#3B4C62',font:{size:11}},grid:{display:false}},
+      y:{ticks:{color:'#3B4C62',font:{size:11},callback:v=>'$'+v.toLocaleString()},grid:{color:'#E8EEF4'}}
+    }, responsive:true, maintainAspectRatio:true }
+  });
+}
+ 
+// ── SAVE / LOAD MONTH ─────────────────────────────────────
+function saveMonth() {
+  const m = months[currentIdx];
+  m.c0179 = +id('c0179').value||0;
+  m.c0180 = +id('c0180').value||0;
+  m.c0181 = +id('c0181').value||0;
+  m.patients = +id('patients').value||0;
+  m.revenue = +id('revenue').value||0;
+  m.opsOrders = id('opsOrders').value;
+  m.opsFacilities = id('opsFacilities').value;
+  m.opsPatients = id('opsPatients').value;
+  m.opsPhysicians = id('opsPhysicians').value;
+  m.opsAccuracy = id('opsAccuracy').value;
+  m.opsSignRate = id('opsSignRate').value;
+  m.opsMinutes = id('opsMinutes').value;
+  m.proactive = id('proactiveList').value;
+  localStorage.setItem('daMonths', JSON.stringify(months));
+}
+ 
+function loadMonth() {
+  const m = months[currentIdx];
+  id('c0179').value = m.c0179;
+  id('c0180').value = m.c0180;
+  id('c0181').value = m.c0181;
+  id('patients').value = m.patients;
+  id('revenue').value = m.revenue;
+  id('opsOrders').value = m.opsOrders||'';
+  id('opsFacilities').value = m.opsFacilities||'';
+  id('opsPatients').value = m.opsPatients||'';
+  id('opsPhysicians').value = m.opsPhysicians||'';
+  id('opsAccuracy').value = m.opsAccuracy||'';
+  id('opsSignRate').value = m.opsSignRate||'';
+  id('opsMinutes').value = m.opsMinutes||'';
+  id('proactiveList').value = m.proactive||'';
+}
+ 
+// ── MONTH TABS ────────────────────────────────────────────
+function renderTabs() {
+  const container = id('month-tabs');
+  container.innerHTML = '';
+  months.forEach((m,i) => {
+    const btn = document.createElement('button');
+    btn.className = 'mtab' + (i===currentIdx?' active':'');
+    btn.textContent = m.name;
+    btn.onclick = () => { saveMonth(); currentIdx=i; loadMonth(); renderTabs(); render(); };
+    container.appendChild(btn);
+  });
+}
+ 
+function addMonth() {
+  const name = prompt('Month name (e.g. May):');
+  if (!name) return;
+  months.push({ name, c0179:0, c0180:0, c0181:0, patients:0, revenue:0,
+    opsOrders:'', opsFacilities:'', opsPatients:'', opsPhysicians:'',
+    opsAccuracy:'', opsSignRate:'', opsMinutes:'', proactive:'' });
+  saveMonth();
+  currentIdx = months.length-1;
+  loadMonth(); renderTabs(); render();
+}
+ 
+function deleteMonth() {
+  if (months.length === 1) { alert('At least one month is required.'); return; }
+  if (!confirm('Remove "' + months[currentIdx].name + '"?')) return;
+  months.splice(currentIdx, 1);
+  currentIdx = Math.min(currentIdx, months.length-1);
+  localStorage.setItem('daMonths', JSON.stringify(months));
+  loadMonth(); renderTabs(); render();
+}
+ 
+// ── RENDER REPORT ─────────────────────────────────────────
+function render() {
+  const pg = id('pgName').value;
+  const period = id('reportPeriod').value;
+  const preparedBy = id('preparedBy').value;
+  const impact = id('impactText').value;
+  const today = new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+ 
+  // header
+  id('r-pgName').textContent = pg;
+  id('r-period').textContent = period;
+  id('r-preparedBy').textContent = preparedBy;
+  
+  
+ 
+  // totals
+  const totPatients = months.reduce((s,m)=>s+m.patients,0);
+  const totRevenue = months.reduce((s,m)=>s+m.revenue,0);
+  const totCodes = months.reduce((s,m)=>s+m.c0179+m.c0180+m.c0181,0);
+  id('r-totalPatients').textContent = totPatients.toLocaleString();
+  id('r-totalRevenue').textContent = '$'+totRevenue.toLocaleString();
+  id('r-totalCodes').textContent = totCodes.toLocaleString();
+ 
+  // codes table
+  let totR=0,tot79=0,tot80=0,tot81=0,totPat=0;
+  id('r-codesBody').innerHTML = months.map(m => {
+    tot79+=m.c0179; tot80+=m.c0180; tot81+=m.c0181; totPat+=m.patients; totR+=m.revenue;
+    return `<tr>
+      <td class="code-cell">${m.name}</td>
+      <td>${m.c0179}</td><td>${m.c0180}</td><td>${m.c0181}</td>
+      <td class="num">${m.patients}</td>
+      <td class="num">$${m.revenue.toLocaleString()}</td>
+    </tr>`;
+  }).join('');
+  id('r-codesFoot').innerHTML = `<tr>
+    <td><strong>TOTAL</strong></td>
+    <td><strong>${tot79}</strong></td><td><strong>${tot80}</strong></td><td><strong>${tot81}</strong></td>
+    <td class="num"><strong>${totPat}</strong></td>
+    <td class="num"><strong>$${totR.toLocaleString()}</strong></td>
+  </tr>`;
+ 
+  // charts
+  const labels = months.map(m=>m.name);
+  barChart.data.labels = labels;
+  barChart.data.datasets[0].data = months.map(m=>m.c0179);
+  barChart.data.datasets[1].data = months.map(m=>m.c0180);
+  barChart.data.datasets[2].data = months.map(m=>m.c0181);
+  barChart.update();
+  lineChart.data.labels = labels;
+  lineChart.data.datasets[0].data = months.map(m=>m.revenue);
+  lineChart.update();
+ 
+  // ops (current month)
+  const cm = months[currentIdx];
+  id('r-opsMonth').textContent = cm.name;
+  id('r-opsOrders').textContent = cm.opsOrders||'—';
+  id('r-opsFacilities').textContent = cm.opsFacilities||'—';
+  id('r-opsPatients').textContent = cm.opsPatients||'—';
+  id('r-opsPhysicians').textContent = cm.opsPhysicians||'—';
+  id('r-opsAccuracy').textContent = cm.opsAccuracy||'—';
+  id('r-opsSignRate').textContent = cm.opsSignRate||'—';
+  id('r-opsMinutes').textContent = cm.opsMinutes||'—';
+ 
+  // proactive list
+  const items = (cm.proactive||'').split('\n').map(s=>s.trim()).filter(Boolean);
+  id('r-proactiveList').innerHTML = items.length
+    ? items.map(t=>`<li>${t}</li>`).join('')
+    : '<li>No items listed.</li>';
+ 
+  // impact
+  id('r-impact').innerHTML = impact;
+}
+ 
+function exportPDF() {
+  window.print();
+}
+ 
+function id(x) { return document.getElementById(x); }
+ 
+// ── INIT ──────────────────────────────────────────────────
+id('impactText').value = 'Physicians stay focused on patient care while we handle the operational workflow and revenue capture behind the scenes.';
+initCharts();
+loadMonth();
+renderTabs();
+render();
+</script>
+</body>
+</html>
